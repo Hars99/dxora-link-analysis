@@ -3,6 +3,7 @@ import logging
 import os
 
 import httpx
+from pydantic import ValidationError
 
 from app.schemas import AnalysisData
 
@@ -64,36 +65,60 @@ def analyze_website(website: str, content: dict) -> AnalysisData:
         "response_format": {"type": "json_object"},
     }
 
-    try:
-        response = httpx.post(
-            endpoint,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=payload,
-            timeout=35.0,
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
+    for attempt in (1, 2):
         try:
-            error = exc.response.json().get("error", {})
-            code = error.get("code") or error.get("type") or "unknown"
-            message = str(error.get("message", "No error message"))
-        except (ValueError, AttributeError):
-            code = "unknown"
-            message = "Groq returned an unreadable error body."
+            response = httpx.post(
+                endpoint,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json=payload,
+                timeout=35.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            try:
+                error = exc.response.json().get("error", {})
+                code = error.get("code") or error.get("type") or "unknown"
+            except (ValueError, AttributeError):
+                code = "unknown"
 
-        logger.warning(
-            "Groq HTTP %s model=%s code=%s message=%r",
-            exc.response.status_code,
-            model,
-            code,
-            message.replace(api_key, "[redacted]")[:500],
-        )
-        raise LLMError("Groq could not complete the analysis.") from exc
+            logger.warning("Groq HTTP %s code=%s", exc.response.status_code, code)
+            raise LLMError("Groq could not complete the analysis.") from exc
+        except httpx.RequestError as exc:
+            logger.warning("Groq request failed: %s", type(exc).__name__)
+            raise LLMError("Could not reach Groq.") from exc
 
-    try:
-        choice = response.json()["choices"][0]
-        if choice["finish_reason"] != "stop":
-            raise LLMError("Groq returned an incomplete analysis.")
-        return AnalysisData.model_validate_json(choice["message"]["content"])
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise LLMError("Groq returned an invalid analysis.") from exc
+        try:
+            choice = response.json()["choices"][0]
+            if choice["finish_reason"] != "stop":
+                raise LLMError("Groq returned an incomplete analysis.")
+            text = choice["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            logger.warning("Could not read Groq's response: %s", type(exc).__name__)
+            raise LLMError("Groq returned an unreadable response.") from exc
+
+        try:
+            return AnalysisData.model_validate_json(text)
+        except ValidationError as exc:
+            issues = []
+            for error in exc.errors(include_input=False, include_context=False):
+                location = error["loc"]
+                if error["type"] == "extra_forbidden":
+                    location = location[:-1]
+                field = ".".join(map(str, location)) or "response"
+                issues.append(f"{field}: {error['type']}")
+
+            summary = "; ".join(issues).replace(api_key, "[redacted]")[:500]
+            logger.warning("Groq analysis validation attempt %s: %r", attempt, summary)
+
+            if attempt == 2:
+                raise LLMError("Groq returned an invalid analysis.") from exc
+
+            payload["messages"].append({
+                "role": "user",
+                "content": (
+                    f"Generate the full JSON analysis again. Fix these schema errors: {summary}. "
+                    "Use every required field. Include five distinct search queries, "
+                    "one each for Google, Facebook, Instagram, LinkedIn, and X. "
+                    "Use only those exact platform names."
+                ),
+            })
