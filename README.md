@@ -2,7 +2,10 @@
 
 A FastAPI service that reads a public website and returns a structured analysis of its business, competitors, search queries, SEO opportunities, services, and target audience. Built for the Dxora Technologies Python practical test.
 
-The API fetches one page, extracts its visible content with BeautifulSoup, and sends that content to Groq for analysis. Pydantic validates the response before FastAPI returns it. The deployed API exposes an interactive Swagger UI at `/docs`.
+The API fetches one page, extracts its visible content with BeautifulSoup, and sends that content to Groq for analysis. Pydantic validates the response before FastAPI returns it. The deployed API exposes an interactive Swagger UI at `/docs` for the refernce images.
+
+**Live demo** — [Try the Link Analysis API in Swagger](https://dxora-link-analysis-r4ug.onrender.com/docs)
+ WHILE TESTING THIS LIVE LINK Groq calls normally makes one request and retries once if Pydantic rejects the output. Use Apple India as the primary demo example and https://ubuntu.com/support as the service-business.
 
 ## Quick start
 
