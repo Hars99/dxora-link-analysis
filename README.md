@@ -1,11 +1,33 @@
 # Website Link Analysis API
 
-A FastAPI service that reads a public website and returns a structured analysis of its business, competitors, search queries, SEO opportunities, services, and target audience. Built for the Dxora Technologies Python practical test.
+An AI-powered website analysis API built using Python, FastAPI, BeautifulSoup, Pydantic, and Groq.
 
-The API fetches one page, extracts its visible content with BeautifulSoup, and sends that content to Groq for analysis. Pydantic validates the response before FastAPI returns it. The deployed API exposes an interactive Swagger UI at `/docs` for the refernce images.
+Developed as part of the Dxora Technologies Python Practical Test.
 
-**Live demo** — [Try the Link Analysis API in Swagger](https://dxora-link-analysis-r4ug.onrender.com/docs)
- WHILE TESTING THIS LIVE LINK Groq calls normally makes one request and retries once if Pydantic rejects the output. Use Apple India as the primary demo example and https://ubuntu.com/support as the service-business.
+The application accepts a public website URL, extracts relevant content, and uses an LLM to generate structured insights across five areas:
+
+- Competitor and brand analysis
+- Target search queries
+- SEO recommendations
+- Products and services
+- Target audience identification
+
+## Live Demo
+
+**API Documentation:** https://dxora-link-analysis-r4ug.onrender.com/docs
+
+**API Endpoint:** https://dxora-link-analysis-r4ug.onrender.com/link-analysis
+
+### Recommended Test URLs
+
+- Apple India: https://www.apple.com/in/
+- Ubuntu Support: https://ubuntu.com/support
+
+Open the API documentation, select POST /link-analysis, enter a URL, and execute the request.
+
+The application normally makes one Groq API request. If the generated output fails Pydantic validation, it retries once with additional instructions.
+
+Note: Groq API rate limits or inaccessible websites may occasionally prevent an analysis from completing.
 
 ## Quick start
 
@@ -103,7 +125,7 @@ The application returns a short `detail` message for failures it handles. Provid
 
 1. **Validate and fetch.** FastAPI validates the request shape. The fetcher accepts HTTP and HTTPS on standard ports, resolves the hostname, checks the resolved address, and connects directly to a checked public IP. It repeats the check for redirect destinations and retains the original hostname for HTTPS verification. These checks reduce the risk of server-side request forgery, where a supplied URL could otherwise cause the server to fetch internal resources.
 2. **Extract and limit content.** BeautifulSoup reads the title, meta description, headings, and main page text. The fetcher limits redirects and HTML size, and the extractor caps the main text at 12,000 characters.
-3. **Generate and validate.** One Groq request uses JSON Object Mode and includes the expected schema in the prompt. Pydantic checks the five analysis sections, distinct query count, supported platform coverage, and service evidence labels.
+3. **Generate and validate.** The application sends extracted website content to Groq using JSON Object Mode.Pydantic validates the response against the defined schema.If validation fails, the application retries once with instructions to correct the schema errors.
 
 The application analyzes one HTML page per request. Sites that build their content in JavaScript or restrict automated access may yield limited text or a fetch error. Analysis quality depends on the content available from that page.
 
@@ -134,6 +156,8 @@ Prices are standard paid text rates in USD per million tokens, checked on **18 N
 | Google · `gemini-3.5-flash-lite` | 1,048,576 input | $0.30 / $2.50 | $0.00310 | Structured output supported. Google describes it as a low-latency model. The project’s Prepay balance blocked generation during local testing, so application latency and quality remain unmeasured. [Model](https://aistudio.google.com/docs/models/gemini-3.5-flash-lite) · [Pricing](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite) |
 | OpenAI · `gpt-5.4-mini` | 400,000 context | $0.75 / $4.50 | $0.00600 | Structured Outputs supported. OpenAI positions it for efficient, high-volume workloads. Application latency and quality remain unmeasured. [Model and pricing](https://developers.openai.com/api/docs/models/gpt-5.4-mini) |
 
+Model accuracy and response speed were not benchmarked across all three providers. Groq was selected based on the successful implementation test and estimated API cost. The other providers were compared using official documentation.
+
 **Recommendation.** Use Groq for this demo because it produced a valid response in the live test and has the lowest estimated paid cost among the three models. Gemini Flash-Lite is a fallback candidate for a project with active API access. To compare accuracy, use the same set of pages for each model and check whether the reported services appear on the page, inferred entries are marked correctly, and search queries reflect the business.
 
 **Cost controls.** Extract readable text before calling the LLM, cap the amount of text sent, and generate all five sections in one request. Keep the output concise. If repeated requests become common, caching validated analyses for a short time can reduce repeat calls.
@@ -150,6 +174,23 @@ For a [Render Web Service](https://render.com/docs/deploy-fastapi), connect the 
 | Environment | Set `GROQ_API_KEY` and `GROQ_MODEL` in the hosting dashboard. |
 
 Open `/docs` on the deployed service and repeat the sample request. Use the public Swagger URL as the demo link.
+
+### Deployment Verification
+
+The application was deployed on Render and tested through
+the publicly accessible Swagger interface.
+
+Verified behavior:
+
+- Apple India returned HTTP 200 with all five analysis sections.
+- Ubuntu Support returned HTTP 200 with structured business insights.
+- Invalid URL formats returned HTTP 422.
+- Private or loopback IP addresses were rejected.
+- Groq rate-limit errors were handled with an API error response.
+
+The local Apple analysis completed in 6,957 ms during one
+recorded test. This is an end-to-end measurement, not an
+average latency or a provider benchmark.
 
 ## Project structure
 
